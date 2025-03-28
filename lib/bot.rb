@@ -148,6 +148,10 @@ class SushiBot
     when 'payment_cash', 'payment_card'
       handle_payment_method(bot, callback_query, user)
       bot.api.answer_callback_query(callback_query_id: callback_query.id)
+    when /^accept_order_(\d+)$/
+      handle_order_acceptance(bot, callback_query, $1, true) if callback_query.message.chat.id.to_s == @admin_chat_id
+    when /^reject_order_(\d+)$/
+      handle_order_acceptance(bot, callback_query, $1, false) if callback_query.message.chat.id.to_s == @admin_chat_id
     end
   end
 
@@ -508,6 +512,11 @@ class SushiBot
   def complete_order(bot, callback_query, order)
     # Формируем сообщение для админа
     admin_message = "🆕 Новый заказ!\n\n"
+    admin_message += "🔢 ID заказа: #{order.id}\n"
+    admin_message += "👤 Клиент: #{callback_query.from.first_name}"
+    admin_message += " #{callback_query.from.last_name}" if callback_query.from.last_name
+    admin_message += " (@#{callback_query.from.username})" if callback_query.from.username
+    admin_message += "\n"
     admin_message += "📱 Телефон: #{order.phone}\n"
     admin_message += "📍 Адрес: #{order.address}\n"
     admin_message += "💭 Комментарий: #{order.comment}\n" if order.comment.present? && order.comment != '-'
@@ -522,10 +531,26 @@ class SushiBot
     end
     admin_message += "\n💵 Итого: #{total} MDL"
 
+    # Добавляем кнопки для админа
+    buttons = [
+      [
+        Telegram::Bot::Types::InlineKeyboardButton.new(
+          text: '✅ Принять заказ',
+          callback_data: "accept_order_#{order.id}"
+        ),
+        Telegram::Bot::Types::InlineKeyboardButton.new(
+          text: '❌ Отклонить заказ',
+          callback_data: "reject_order_#{order.id}"
+        )
+      ]
+    ]
+    markup = Telegram::Bot::Types::InlineKeyboardMarkup.new(inline_keyboard: buttons)
+
     # Отправляем сообщение админу
     bot.api.send_message(
       chat_id: @admin_chat_id,
       text: admin_message,
+      reply_markup: markup,
       parse_mode: 'HTML'
     )
 
@@ -536,9 +561,49 @@ class SushiBot
     )
 
     # Создаем новую пустую корзину для пользователя
-    order.update(status: 'processing')
+    order.update(status: 'pending')
     user = User.find_by(telegram_id: callback_query.from.id)
     user.orders.create(status: 'cart')
+  end
+
+  def handle_order_acceptance(bot, callback_query, order_id, accepted)
+    order = Order.find(order_id)
+    return unless order
+
+    # Обновляем статус заказа
+    new_status = accepted ? 'accepted' : 'rejected'
+    order.update(status: new_status)
+
+    # Отправляем сообщение клиенту
+    message = if accepted
+      "✅ Ваш заказ принят и готовится!\n\nОжидайте доставку в течение 60-90 минут.\n\nПриятного аппетита! 🍣"
+    else
+      "❌ К сожалению, ваш заказ отклонен.\n\n" \
+      "Приносим извинения за неудобства.\n" \
+      "Пожалуйста, попробуйте оформить заказ позже или свяжитесь с нами:\n\n" \
+      "⏰ Время работы: 12:00 – 00:00\n" \
+      "📞 Телефон: 061 061 111"
+    end
+
+    bot.api.send_message(
+      chat_id: order.user.telegram_id,
+      text: message
+    )
+
+    # Обновляем сообщение в админке
+    admin_message = callback_query.message.text + "\n\n"
+    admin_message += accepted ? "✅ Заказ принят" : "❌ Заказ отклонен"
+
+    bot.api.edit_message_text(
+      chat_id: @admin_chat_id,
+      message_id: callback_query.message.message_id,
+      text: admin_message
+    )
+
+    bot.api.answer_callback_query(
+      callback_query_id: callback_query.id,
+      text: accepted ? "Заказ ##{order.id} принят" : "Заказ ##{order.id} отклонен"
+    )
   end
 
   def update_cart_quantity(bot, callback_query, product_id, change, user)
