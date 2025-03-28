@@ -284,7 +284,14 @@ class SushiBot
   end
 
   def show_cart(bot, message_or_callback, user)
-    order = user.orders.find_or_create_by(status: 'cart')
+    # Находим существующую корзину
+    order = user.orders.find_by(status: 'cart')
+    
+    # Если корзины нет, закрываем старые и создаем новую
+    if order.nil?
+      close_old_carts(user)
+      order = user.orders.create(status: 'cart')
+    end
     
     chat_id = if message_or_callback.is_a?(Telegram::Bot::Types::CallbackQuery)
                 message_or_callback.message.chat.id
@@ -383,7 +390,10 @@ class SushiBot
   def show_contacts(bot, message)
     bot.api.send_message(
       chat_id: message.chat.id,
-      text: "🏠 Наш адрес: [Адрес ресторана]\n📞 Телефон: [Номер телефона]\n⏰ Время работы: [Часы работы]"
+      text: "📍 Адрес:\nStr. Mitropolit Gavriil Bănulescu-Bodoni 57\n\n" \
+            "📞 Телефон:\n061 061 111\n\n" \
+            "📧 E-mail:\noffice@ohmysushi.md\n\n" \
+            "⏰ Время работы:\n12:00 – 00:00"
     )
   end
 
@@ -563,6 +573,7 @@ class SushiBot
     # Создаем новую пустую корзину для пользователя
     order.update(status: 'pending')
     user = User.find_by(telegram_id: callback_query.from.id)
+    close_old_carts(user)
     user.orders.create(status: 'cart')
   end
 
@@ -604,6 +615,12 @@ class SushiBot
       callback_query_id: callback_query.id,
       text: accepted ? "Заказ ##{order.id} принят" : "Заказ ##{order.id} отклонен"
     )
+
+    # Создаем новую корзину только если заказ отклонен
+    if !accepted
+      close_old_carts(order.user)
+      order.user.orders.create(status: 'cart')
+    end
   end
 
   def update_cart_quantity(bot, callback_query, product_id, change, user)
@@ -632,6 +649,11 @@ class SushiBot
 
     # Обновляем отображение корзины
     show_cart(bot, callback_query, user)
+  end
+
+  def close_old_carts(user)
+    # Закрываем все старые корзины пользователя
+    user.orders.where(status: 'cart').update_all(status: 'abandoned')
   end
 end
 
