@@ -133,11 +133,20 @@ class SushiBot
     when /^quantity_(\d+)_(-?\d+)$/
       update_quantity(bot, callback_query, $1, $2.to_i, user)
       bot.api.answer_callback_query(callback_query_id: callback_query.id)
+    when /^cart_quantity_(\d+)_(-?\d+)$/
+      update_cart_quantity(bot, callback_query, $1, $2.to_i, user)
+      bot.api.answer_callback_query(callback_query_id: callback_query.id)
     when 'back_to_categories'
       show_categories(bot, callback_query)
       bot.api.answer_callback_query(callback_query_id: callback_query.id)
     when 'show_cart'
       show_cart(bot, callback_query, user)
+      bot.api.answer_callback_query(callback_query_id: callback_query.id)
+    when 'checkout'
+      start_checkout(bot, callback_query, user)
+      bot.api.answer_callback_query(callback_query_id: callback_query.id)
+    when 'payment_cash', 'payment_card'
+      handle_payment_method(bot, callback_query, user)
       bot.api.answer_callback_query(callback_query_id: callback_query.id)
     end
   end
@@ -287,28 +296,84 @@ class SushiBot
       return
     end
 
-    text = "Ваш заказ:\n\n"
+    text = "🛒 Ваша корзина:\n\n"
+    buttons = []
     total = 0
+
+    # Формируем список товаров
     order.order_items.each do |item|
       subtotal = item.quantity * item.price
       total += subtotal
-      text += "#{item.product.name} x#{item.quantity} = #{subtotal} MDL\n"
+      
+      # Добавляем название товара как кнопку
+      buttons << [
+        Telegram::Bot::Types::InlineKeyboardButton.new(
+          text: "#{item.product.name} - #{item.quantity} x #{item.price} = #{subtotal} MDL",
+          callback_data: "current_quantity"
+        )
+      ]
+      
+      # Добавляем кнопки управления количеством
+      buttons << [
+        Telegram::Bot::Types::InlineKeyboardButton.new(
+          text: "➖",
+          callback_data: "cart_quantity_#{item.product.id}_-1"
+        ),
+        Telegram::Bot::Types::InlineKeyboardButton.new(
+          text: item.quantity.to_s,
+          callback_data: "current_quantity"
+        ),
+        Telegram::Bot::Types::InlineKeyboardButton.new(
+          text: "➕",
+          callback_data: "cart_quantity_#{item.product.id}_1"
+        )
+      ]
     end
-    text += "\nИтого: #{total} MDL"
 
-    buttons = [[
+    text += "💵 Итого: #{total} MDL"
+
+    # Добавляем кнопки действий
+    buttons << [
       Telegram::Bot::Types::InlineKeyboardButton.new(
-        text: 'Оформить заказ',
+        text: '✅ Оформить заказ',
         callback_data: 'checkout'
       )
-    ]]
+    ]
+    buttons << [
+      Telegram::Bot::Types::InlineKeyboardButton.new(
+        text: '⬅️ Вернуться в меню',
+        callback_data: 'back_to_categories'
+      )
+    ]
+
     markup = Telegram::Bot::Types::InlineKeyboardMarkup.new(inline_keyboard: buttons)
 
-    bot.api.send_message(
-      chat_id: chat_id,
-      text: text,
-      reply_markup: markup
-    )
+    # Пытаемся обновить существующее сообщение, если это callback
+    if message_or_callback.is_a?(Telegram::Bot::Types::CallbackQuery)
+      begin
+        bot.api.edit_message_text(
+          chat_id: chat_id,
+          message_id: message_or_callback.message.message_id,
+          text: text,
+          reply_markup: markup,
+          parse_mode: 'HTML'
+        )
+      rescue
+        bot.api.send_message(
+          chat_id: chat_id,
+          text: text,
+          reply_markup: markup,
+          parse_mode: 'HTML'
+        )
+      end
+    else
+      bot.api.send_message(
+        chat_id: chat_id,
+        text: text,
+        reply_markup: markup,
+        parse_mode: 'HTML'
+      )
+    end
   end
 
   def show_contacts(bot, message)
@@ -339,8 +404,169 @@ class SushiBot
   end
 
   def handle_text_input(bot, message, user)
-    # Здесь можно добавить обработку текстовых сообщений
-    # например, для ввода адреса доставки или номера телефона
+    order = user.orders.find_by(status: 'checkout')
+    return unless order
+
+    case order.checkout_step
+    when 'phone'
+      if message.text.match?(/^\+?\d{8,15}$/)
+        order.update(phone: message.text, checkout_step: 'address')
+        ask_for_address(bot, message.chat.id)
+      else
+        bot.api.send_message(
+          chat_id: message.chat.id,
+          text: "Пожалуйста, введите корректный номер телефона"
+        )
+      end
+    when 'address'
+      if message.text.length >= 5
+        order.update(address: message.text, checkout_step: 'comment')
+        ask_for_comment(bot, message.chat.id)
+      else
+        bot.api.send_message(
+          chat_id: message.chat.id,
+          text: "Пожалуйста, введите более подробный адрес"
+        )
+      end
+    when 'comment'
+      order.update(comment: message.text, checkout_step: 'payment')
+      show_payment_methods(bot, message.chat.id)
+    end
+  end
+
+  def start_checkout(bot, callback_query, user)
+    order = user.orders.find_by(status: 'cart')
+    return unless order&.order_items&.any?
+
+    # Переводим заказ в статус оформления
+    order.update(status: 'checkout', checkout_step: 'phone')
+    
+    # Запрашиваем телефон
+    bot.api.send_message(
+      chat_id: callback_query.message.chat.id,
+      text: "Для оформления заказа, пожалуйста, введите ваш номер телефона:"
+    )
+  end
+
+  def ask_for_address(bot, chat_id)
+    bot.api.send_message(
+      chat_id: chat_id,
+      text: "Теперь введите адрес доставки:"
+    )
+  end
+
+  def ask_for_comment(bot, chat_id)
+    bot.api.send_message(
+      chat_id: chat_id,
+      text: "Добавьте комментарий к заказу (или отправьте '-' чтобы пропустить):"
+    )
+  end
+
+  def show_payment_methods(bot, chat_id)
+    buttons = [
+      [
+        Telegram::Bot::Types::InlineKeyboardButton.new(
+          text: "💵 Наличными при получении",
+          callback_data: "payment_cash"
+        )
+      ],
+      [
+        Telegram::Bot::Types::InlineKeyboardButton.new(
+          text: "💳 Оплата картой",
+          callback_data: "payment_card"
+        )
+      ]
+    ]
+    markup = Telegram::Bot::Types::InlineKeyboardMarkup.new(inline_keyboard: buttons)
+    
+    bot.api.send_message(
+      chat_id: chat_id,
+      text: "Выберите способ оплаты:",
+      reply_markup: markup
+    )
+  end
+
+  def handle_payment_method(bot, callback_query, user)
+    order = user.orders.find_by(status: 'checkout')
+    return unless order
+
+    payment_method = callback_query.data.split('_').last
+    order.update(payment_method: payment_method)
+
+    if payment_method == 'cash'
+      complete_order(bot, callback_query, order)
+    else
+      # В будущем здесь будет логика для оплаты картой
+      bot.api.send_message(
+        chat_id: callback_query.message.chat.id,
+        text: "⚠️ Оплата картой временно недоступна. Пожалуйста, выберите оплату наличными."
+      )
+      show_payment_methods(bot, callback_query.message.chat.id)
+    end
+  end
+
+  def complete_order(bot, callback_query, order)
+    # Формируем сообщение для админа
+    admin_message = "🆕 Новый заказ!\n\n"
+    admin_message += "📱 Телефон: #{order.phone}\n"
+    admin_message += "📍 Адрес: #{order.address}\n"
+    admin_message += "💭 Комментарий: #{order.comment}\n" if order.comment.present? && order.comment != '-'
+    admin_message += "💰 Оплата: #{order.payment_method == 'cash' ? 'Наличными при получении' : 'Картой'}\n\n"
+    admin_message += "📝 Заказ:\n"
+    
+    total = 0
+    order.order_items.each do |item|
+      subtotal = item.quantity * item.price
+      total += subtotal
+      admin_message += "- #{item.product.name} x#{item.quantity} = #{subtotal} MDL\n"
+    end
+    admin_message += "\n💵 Итого: #{total} MDL"
+
+    # Отправляем сообщение админу
+    bot.api.send_message(
+      chat_id: @admin_chat_id,
+      text: admin_message,
+      parse_mode: 'HTML'
+    )
+
+    # Отправляем подтверждение пользователю
+    bot.api.send_message(
+      chat_id: callback_query.message.chat.id,
+      text: "✅ Ваш заказ успешно оформлен!\n\nМы свяжемся с вами в ближайшее время для подтверждения заказа.\n\nСпасибо, что выбрали Oh! My Sushi! 🍣"
+    )
+
+    # Создаем новую пустую корзину для пользователя
+    order.update(status: 'processing')
+    user = User.find_by(telegram_id: callback_query.from.id)
+    user.orders.create(status: 'cart')
+  end
+
+  def update_cart_quantity(bot, callback_query, product_id, change, user)
+    order = user.orders.find_by(status: 'cart')
+    return unless order
+
+    product = Product.find(product_id)
+    order_item = order.order_items.find_by(product: product)
+    return unless order_item
+
+    new_quantity = order_item.quantity + change
+    
+    if new_quantity <= 0
+      order_item.destroy
+      bot.api.answer_callback_query(
+        callback_query_id: callback_query.id,
+        text: "Товар удален из корзины"
+      )
+    else
+      order_item.update(quantity: new_quantity)
+      bot.api.answer_callback_query(
+        callback_query_id: callback_query.id,
+        text: "Количество изменено на #{new_quantity}"
+      )
+    end
+
+    # Обновляем отображение корзины
+    show_cart(bot, callback_query, user)
   end
 end
 
