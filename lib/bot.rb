@@ -2,6 +2,8 @@ require 'telegram/bot'
 require 'dotenv/load'
 require_relative 'models'
 require_relative 'scraper'
+require_relative 'maib_client'
+require_relative 'maib_client_test'
 
 class SushiBot
   def initialize
@@ -418,15 +420,25 @@ class SushiBot
   end
 
   def handle_text_input(bot, message, user)
+    puts "Debug: handle_text_input called"
+    puts "Debug: user_id = #{user.id}"
+    puts "Debug: message.text = #{message.text}"
+    
     order = user.orders.find_by(status: 'checkout')
+    puts "Debug: order = #{order.inspect}"
+    
     return unless order
+    return if order.checkout_step == 'payment'
 
     case order.checkout_step
     when 'phone'
+      puts "Debug: processing phone input"
       if message.text.match?(/^\+?\d{8,15}$/)
+        puts "Debug: valid phone number"
         order.update(phone: message.text, checkout_step: 'address')
         ask_for_address(bot, message.chat.id)
       else
+        puts "Debug: invalid phone number"
         bot.api.send_message(
           chat_id: message.chat.id,
           text: "Пожалуйста, введите корректный номер телефона"
@@ -450,14 +462,16 @@ class SushiBot
 
   def start_checkout(bot, callback_query, user)
     order = user.orders.find_by(status: 'cart')
-    return unless order&.order_items&.any?
+    return unless order
 
-    # Переводим заказ в статус оформления
+    # Закрываем старые корзины и заказы в процессе оформления
+    user.orders.where(status: ['cart', 'checkout']).where.not(id: order.id).update_all(status: 'cancelled')
+    
+    # Обновляем статус текущего заказа
     order.update(status: 'checkout', checkout_step: 'phone')
     
-    # Запрашиваем телефон
     bot.api.send_message(
-      chat_id: callback_query.message.chat.id,
+      chat_id: callback_query.from.id,
       text: "Для оформления заказа, пожалуйста, введите ваш номер телефона:"
     )
   end
@@ -501,27 +515,42 @@ class SushiBot
   end
 
   def handle_payment_method(bot, callback_query, user)
+    
     order = user.orders.find_by(status: 'checkout')
+    
     return unless order
-
+    
     payment_method = callback_query.data.split('_').last
     order.update(payment_method: payment_method)
-
+    
     if payment_method == 'cash'
       complete_order(bot, callback_query, order)
     else
-      # В будущем здесь будет логика для оплаты картой
-      bot.api.send_message(
-        chat_id: callback_query.message.chat.id,
-        text: "⚠️ Оплата картой временно недоступна. Пожалуйста, выберите оплату наличными."
+      client = ENV['MAIB_TEST_MODE'] == 'true' ? MaibClientTest.new : MaibClient.new(
+        ENV['MAIB_PROJECT_ID'],
+        ENV['MAIB_PROJECT_SECRET'],
+        ENV['MAIB_SIGNATURE_KEY']
       )
-      show_payment_methods(bot, callback_query.message.chat.id)
+      
+      result = client.create_payment(order)
+      
+      if result['status'] == 'success'
+        bot.api.send_message(
+          chat_id: callback_query.message.chat.id,
+          text: "Для оплаты картой, пожалуйста, перейдите по ссылке:\n#{result['redirectUrl']}\n\nПосле успешной оплаты мы свяжемся с вами для подтверждения заказа."
+        )
+      else
+        bot.api.send_message(
+          chat_id: callback_query.message.chat.id,
+          text: "Произошла ошибка при создании платежа. Пожалуйста, попробуйте другой способ оплаты."
+        )
+      end
     end
   end
 
   def complete_order(bot, callback_query, order)
     # Формируем сообщение для админа
-    admin_message = "🆕 Новый заказ!\n\n"
+    admin_message = "Новый заказ!\n\n"
     admin_message += "🔢 ID заказа: #{order.id}\n"
     admin_message += "👤 Клиент: #{callback_query.from.first_name}"
     admin_message += " #{callback_query.from.last_name}" if callback_query.from.last_name
