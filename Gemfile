@@ -1,7 +1,7 @@
 source 'https://rubygems.org'
 
 gem 'telegram-bot-ruby'
-gem 'sqlite3'
+gem 'pg'
 gem 'activerecord'
 gem 'nokogiri'
 gem 'httparty'

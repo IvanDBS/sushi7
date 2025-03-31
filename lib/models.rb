@@ -1,10 +1,66 @@
 require 'active_record'
+require 'dotenv/load'
 
-# Настройка подключения к базе данных
-ActiveRecord::Base.establish_connection(
-  adapter: 'sqlite3',
-  database: File.join(File.dirname(__FILE__), '../db/sushi_bot.sqlite3')
-)
+# Database configuration
+db_config = {
+  adapter: 'postgresql',
+  host: ENV.fetch('POSTGRES_HOST', 'localhost'),
+  database: ENV.fetch('POSTGRES_DATABASE', 'sushi7_development'),
+  username: ENV.fetch('POSTGRES_USER', 'postgres'),
+  password: ENV.fetch('POSTGRES_PASSWORD', '')
+}
+
+# Setup database connection
+ActiveRecord::Base.establish_connection(db_config)
+
+# Create tables if they don't exist
+ActiveRecord::Schema.define do
+  # Only create tables if they don't exist
+  create_table :categories, if_not_exists: true do |t|
+    t.string :name
+    t.string :url_name
+    t.timestamps
+  end
+
+  create_table :products, if_not_exists: true do |t|
+    t.string :name
+    t.text :description
+    t.decimal :price, precision: 10, scale: 2
+    t.string :image_url
+    t.references :category, foreign_key: true
+    t.timestamps
+  end
+
+  create_table :users, if_not_exists: true do |t|
+    t.integer :telegram_id
+    t.string :first_name
+    t.string :last_name
+    t.string :username
+    t.string :language, default: 'ru'
+    t.timestamps
+  end
+
+  create_table :orders, if_not_exists: true do |t|
+    t.references :user
+    t.string :status
+    t.string :phone
+    t.string :address
+    t.text :comment
+    t.string :payment_method
+    t.string :checkout_step
+    t.string :payment_id
+    t.string :payment_status
+    t.timestamps
+  end
+
+  create_table :order_items, if_not_exists: true do |t|
+    t.references :order
+    t.references :product
+    t.integer :quantity
+    t.decimal :price
+    t.timestamps
+  end
+end
 
 # Модель категории меню
 class Category < ActiveRecord::Base
@@ -58,51 +114,4 @@ end
 class OrderItem < ActiveRecord::Base
   belongs_to :order
   belongs_to :product
-end
-
-# Создание таблиц, если они не существуют
-ActiveRecord::Schema.define do
-  create_table :categories, if_not_exists: true do |t|
-    t.string :name
-    t.string :url_name
-    t.timestamps
-  end
-
-  create_table :products, if_not_exists: true do |t|
-    t.string :name
-    t.text :description
-    t.decimal :price, precision: 10, scale: 2
-    t.string :image_url
-    t.references :category, foreign_key: true
-    t.timestamps
-  end
-
-  create_table :users, if_not_exists: true do |t|
-    t.integer :telegram_id
-    t.string :first_name
-    t.string :last_name
-    t.string :username
-    t.timestamps
-  end
-
-  create_table :orders, if_not_exists: true do |t|
-    t.references :user
-    t.string :status
-    t.string :phone
-    t.string :address
-    t.text :comment
-    t.string :payment_method
-    t.string :checkout_step
-    t.string :payment_id
-    t.string :payment_status
-    t.timestamps
-  end
-
-  create_table :order_items, if_not_exists: true do |t|
-    t.references :order
-    t.references :product
-    t.integer :quantity
-    t.decimal :price
-    t.timestamps
-  end
 end 
