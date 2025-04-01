@@ -1,7 +1,7 @@
 module Translations
   TRANSLATIONS = {
     ru: {
-      welcome: "Добро пожаловать в Sushi7! 🍱\n\nВыберите действие:",
+      welcome: "Добро пожаловать в Oh! My Sushi! 🍱\n\nОткройте меню и выберите ваше идеальное блюдо! 👇",
       menu: "🍱 Меню",
       cart: "🛒 Корзина",
       settings: "⚙️ Настройки",
@@ -45,7 +45,7 @@ module Translations
       }
     },
     ro: {
-      welcome: "Bine ați venit la Sushi7! 🍱\n\nAlegeți o acțiune:",
+      welcome: "Bine ați venit la Oh! My Sushi! 🍱\n\nDeschideți meniul și alegeți preparatul perfect! 👇",
       menu: "🍱 Meniu",
       cart: "🛒 Coș",
       settings: "⚙️ Setări",
@@ -89,7 +89,7 @@ module Translations
       }
     },
     en: {
-      welcome: "Welcome to Sushi7! 🍱\n\nChoose an action:",
+      welcome: "Welcome to Oh! My Sushi! 🍱\n\nOpen the menu and choose your perfect dish! 👇",
       menu: "🍱 Menu",
       cart: "🛒 Cart",
       settings: "⚙️ Settings",
