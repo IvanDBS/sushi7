@@ -6,6 +6,8 @@ require_relative 'maib_client'
 require_relative 'maib_client_test'
 require_relative 'translations'
 require_relative 'ingredients'
+require 'http'
+require 'tempfile'
 
 class SushiBot
   def initialize
@@ -298,8 +300,10 @@ class SushiBot
     markup = Telegram::Bot::Types::InlineKeyboardMarkup.new(inline_keyboard: buttons)
 
     begin
-      # Try to send with photo first
-      if product.image_url && valid_image_url?(product.image_url)
+      if product.image_url
+        puts "Attempting to send photo for product #{product.name} (ID: #{product.id})"
+        puts "Image URL: #{product.image_url}"
+        
         begin
           bot.api.send_photo(
             chat_id: callback_query.message.chat.id,
@@ -307,12 +311,10 @@ class SushiBot
             caption: message,
             reply_markup: markup
           )
-        rescue Telegram::Bot::Exceptions::ResponseError => e
-          # If photo sending fails, delete old message and send text-only
-          bot.api.delete_message(
-            chat_id: callback_query.message.chat.id,
-            message_id: callback_query.message.message_id
-          )
+          puts "Successfully sent photo for product #{product.name}"
+        rescue => e
+          puts "Failed to send photo for product #{product.name}: #{e.message}"
+          # If photo sending fails, send text-only
           bot.api.send_message(
             chat_id: callback_query.message.chat.id,
             text: message,
@@ -320,11 +322,8 @@ class SushiBot
           )
         end
       else
-        # If no image URL, delete old message and send text-only
-        bot.api.delete_message(
-          chat_id: callback_query.message.chat.id,
-          message_id: callback_query.message.message_id
-        )
+        puts "No image URL for product #{product.name}"
+        # If no image URL, send text-only
         bot.api.send_message(
           chat_id: callback_query.message.chat.id,
           text: message,
@@ -332,7 +331,8 @@ class SushiBot
         )
       end
     rescue => e
-      puts "Error in show_product_details: #{e.message}"
+      puts "Error in show_product_details for product #{product.name}: #{e.message}"
+      puts e.backtrace
       # Fallback: try to send text-only message
       begin
         bot.api.send_message(
@@ -341,7 +341,7 @@ class SushiBot
           reply_markup: markup
         )
       rescue => e
-        puts "Critical error in show_product_details fallback: #{e.message}"
+        puts "Failed to send fallback message: #{e.message}"
       end
     end
   end
@@ -823,15 +823,21 @@ class SushiBot
       Ingredients.price_format(price, language)
     end
 
-    # Заменяем ингредиенты
+    # Заменяем ингредиенты, но пропускаем названия блюд в сетах и роллах
     ingredients = Ingredients.all
 
     if language == 'ru'
       ingredients['ru'].each do |rom, rus|
+        # Пропускаем перевод, если это часть названия блюда в сете или ролле
+        next if description.match?(/\b(?:set|сет|seturi|roll|ролл|maki|маки|nigiri|нигири|gunkan|гункан)\b/i) && 
+                description.match?(/\b#{rom}\b/i)
         description = description.gsub(/\b#{rom}\b/i, rus)
       end
     elsif language == 'en'
       ingredients['en'].each do |rom, eng|
+        # Пропускаем перевод, если это часть названия блюда в сете или ролле
+        next if description.match?(/\b(?:set|сет|seturi|roll|ролл|maki|маки|nigiri|нигири|gunkan|гункан)\b/i) && 
+                description.match?(/\b#{rom}\b/i)
         description = description.gsub(/\b#{rom}\b/i, eng)
       end
     end
@@ -840,11 +846,15 @@ class SushiBot
   end
 
   def valid_image_url?(url)
-    return false if url.nil? || url.empty?
-    uri = URI.parse(url)
-    uri.is_a?(URI::HTTP) || uri.is_a?(URI::HTTPS)
-  rescue URI::InvalidURIError
-    false
+    return false unless url && url.is_a?(String)
+    
+    begin
+      response = HTTP.head(url)
+      response.status.success? && response.mime_type.start_with?('image/')
+    rescue => e
+      puts "Error checking image URL #{url}: #{e.message}"
+      false
+    end
   end
 end
 

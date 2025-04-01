@@ -2,27 +2,10 @@ module Ingredients
   def self.all
     {
       'ru' => {
-        # Базовые ингредиенты суши
-        'PHILADELPHIA' => 'ФИЛАДЕЛЬФИЯ',
-        'CALIFORNIA' => 'КАЛИФОРНИЯ',
-        'BLACK&WHITE' => 'БЛЭК&УАЙТ',
-        'UNAGI' => 'УНАГИ',
-        'TEMPURA' => 'ТЕМПУРА',
-        'SAKE' => 'СЯКЕ',
-        'KAPPA' => 'КАППА',
-        'MAKI' => 'МАКИ',
-        'CANADA' => 'КАНАДА',
-        'IMPERIAL ROLL' => 'ИМПЕРИАЛ РОЛЛ',
-        'EBI' => 'ЭБИ',
-        'KANI' => 'КАНИ',
-        'HOT' => 'ХОТ',
-        'VULCAN' => 'ВУЛКАН',
-        'OTOMO' => 'ОТОМО',
-        'DRAGON' => 'ДРАКОН',
-
         # Основные ингредиенты
-        'Soba' => 'Соба',
+        'Soba' => 'СОБА',
         'ton' => 'тунец',
+        'maguro' => 'тунец',
         'edamame' => 'эдамаме',
         'nori' => 'нори',
         'mango' => 'манго',
