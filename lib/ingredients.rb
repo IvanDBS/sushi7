@@ -99,7 +99,29 @@ module Ingredients
         'fidea' => 'лапша',
         'bulion ramen' => 'бульон рамен',
         'bulion tom yum' => 'бульон том ям',
-        'bulion miso' => 'бульон мисо'
+        'bulion miso' => 'бульон мисо',
+
+        # Супы и их ингредиенты
+        'tăiței' => 'лапша',
+        'tăiței ramen' => 'лапша рамен',
+        'tăiței udon' => 'лапша удон',
+        'tăiței soba' => 'лапша соба',
+        'ou fiert' => 'вареное яйцо',
+        'ceapă verde' => 'зеленый лук',
+        'alge wakame' => 'водоросли вакаме',
+        'porumb' => 'кукуруза',
+        'lapte de cocos' => 'кокосовое молоко',
+        'pastă tom yum' => 'паста том ям',
+        'pastă miso' => 'паста мисо',
+        'ciuperci champinion' => 'грибы шампиньоны',
+        'ciuperci enoki' => 'грибы эноки',
+        'fasole roșie' => 'красная фасоль',
+        'fasole verde' => 'зеленая фасоль',
+        'porumb dulce' => 'сладкая кукуруза',
+        'ardei iute' => 'острый перец',
+        'frunze de coriandru' => 'листья кориандра',
+        'mentă' => 'мята',
+        'lime' => 'лайм',
       },
       'en' => {
         # Базовые ингредиенты суши
@@ -197,7 +219,33 @@ module Ingredients
         'fidea' => 'noodles',
         'bulion ramen' => 'ramen broth',
         'bulion tom yum' => 'tom yum broth',
-        'bulion miso' => 'miso broth'
+        'bulion miso' => 'miso broth',
+
+        # Супы и их ингредиенты
+        'bulion' => 'broth',
+        'bulion ramen' => 'ramen broth',
+        'bulion tom yum' => 'tom yum broth',
+        'bulion miso' => 'miso broth',
+        'tăiței' => 'noodles',
+        'tăiței ramen' => 'ramen noodles',
+        'tăiței udon' => 'udon noodles',
+        'tăiței soba' => 'soba noodles',
+        'ou fiert' => 'boiled egg',
+        'ceapă verde' => 'green onion',
+        'alge wakame' => 'wakame seaweed',
+        'porumb' => 'corn',
+        'lapte de cocos' => 'coconut milk',
+        'pastă tom yum' => 'tom yum paste',
+        'pastă miso' => 'miso paste',
+        'ciuperci champinion' => 'champignon mushrooms',
+        'ciuperci enoki' => 'enoki mushrooms',
+        'fasole roșie' => 'red beans',
+        'fasole verde' => 'green beans',
+        'porumb dulce' => 'sweet corn',
+        'ardei iute' => 'chili pepper',
+        'frunze de coriandru' => 'coriander leaves',
+        'mentă' => 'mint',
+        'lime' => 'lime',
       }
     }
   end
