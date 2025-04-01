@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "9292:9292"
+    environment:
+      - POSTGRES_HOST=db
+      - POSTGRES_USER=sushi_bot
+      - POSTGRES_PASSWORD=sushi_bot_password
+      - POSTGRES_DATABASE=sushi7_production
+      - RACK_ENV=production
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - ADMIN_CHAT_ID=${ADMIN_CHAT_ID}
+    depends_on:
+      - db
+    volumes:
+      - .:/app
+    restart: always
+
+  db:
+    image: postgres:15
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./sushi7_backup.sql:/docker-entrypoint-initdb.d/sushi7_backup.sql
+    environment:
+      - POSTGRES_USER=sushi_bot
+      - POSTGRES_PASSWORD=sushi_bot_password
+      - POSTGRES_DB=sushi7_production
+    restart: always
+
+volumes:
+  postgres_data: 
