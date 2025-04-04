@@ -2,33 +2,26 @@ require 'nokogiri'
 require 'httparty'
 require_relative 'models'
 
-class MenuScraper
+class MenuScraperLight
   BASE_URL = 'https://ohmysushi.md'
 
   def self.scrape_menu
-    puts "Начинаем парсинг меню..."
-    # Очищаем старые данные
-    Product.delete_all
-    Category.delete_all
-    
-    # Сбрасываем последовательность ID
-    ActiveRecord::Base.connection.execute("ALTER SEQUENCE products_id_seq RESTART WITH 1;")
-    ActiveRecord::Base.connection.execute("ALTER SEQUENCE categories_id_seq RESTART WITH 1;")
+    puts "Начинаем парсинг меню (легкий режим)..."
     
     begin
-      # Создаем основные категории вручную
+      # Создаем основные категории, если они не существуют
       categories = {
-        sets: Category.create!(name: '🍱 Сеты', url_name: 'seturi'),
-        sushi: Category.create!(name: '🍣 Суши', url_name: 'sushi'),
-        maki: Category.create!(name: '🍙 Маки-Нигири-Гункан', url_name: 'maki-nigiri-guncan'),
-        poke: Category.create!(name: '🥗 Поке Боул', url_name: 'poke-bowl'),
-        tempura: Category.create!(name: '🍤 Темпура', url_name: 'tempura'),
-        vulcan: Category.create!(name: '🌋 Вулкан', url_name: 'vulcan'),
-        wok: Category.create!(name: '🥢 Вок', url_name: 'wok'),
-        soups: Category.create!(name: '🥣 Супы', url_name: 'supe'),
-        drinks: Category.create!(name: '🥤 Напитки', url_name: 'bauturi'),
-        desserts: Category.create!(name: '🍰 Десерты', url_name: 'dessert-2'),
-        sale: Category.create!(name: '🏷️ Акции', url_name: 'reduceri')
+        sets: Category.find_or_create_by!(name: '🍱 Сеты', url_name: 'seturi'),
+        sushi: Category.find_or_create_by!(name: '🍣 Суши', url_name: 'sushi'),
+        maki: Category.find_or_create_by!(name: '🍙 Маки-Нигири-Гункан', url_name: 'maki-nigiri-guncan'),
+        poke: Category.find_or_create_by!(name: '🥗 Поке Боул', url_name: 'poke-bowl'),
+        tempura: Category.find_or_create_by!(name: '🍤 Темпура', url_name: 'tempura'),
+        vulcan: Category.find_or_create_by!(name: '🌋 Вулкан', url_name: 'vulcan'),
+        wok: Category.find_or_create_by!(name: '🥢 Вок', url_name: 'wok'),
+        soups: Category.find_or_create_by!(name: '🥣 Супы', url_name: 'supe'),
+        drinks: Category.find_or_create_by!(name: '🥤 Напитки', url_name: 'bauturi'),
+        desserts: Category.find_or_create_by!(name: '🍰 Десерты', url_name: 'dessert-2'),
+        sale: Category.find_or_create_by!(name: '🏷️ Акции', url_name: 'reduceri')
       }
       
       # Парсим каждую категорию
@@ -38,8 +31,8 @@ class MenuScraper
       end
       
       puts "\nПарсинг завершен!"
-      puts "Создано категорий: #{Category.count}"
-      puts "Создано продуктов: #{Product.count}"
+      puts "Всего категорий: #{Category.count}"
+      puts "Всего продуктов: #{Product.count}"
       
     rescue => e
       puts "❌ Ошибка при парсинге меню: #{e.message}"
@@ -85,6 +78,13 @@ class MenuScraper
           begin
             name = product_element.css('.product-title, .woocommerce-loop-product__title').text.strip
             puts "  Обработка продукта: #{name}"
+            
+            # Проверяем, существует ли продукт с таким названием
+            existing_product = Product.find_by(name: name)
+            if existing_product
+              puts "    ⏩ Пропускаем существующий продукт: #{name}"
+              next
+            end
             
             # Получаем изображение
             image = product_element.css('img').first
@@ -138,32 +138,17 @@ class MenuScraper
                 sale_price = sale_price_element.text.strip.gsub(/[^\d,]/, '').gsub(',', '.').to_f
                 regular_price = regular_price_element.text.strip.gsub(/[^\d,]/, '').gsub(',', '.').to_f
                 
-                # Проверяем, существует ли продукт с таким названием
-                product = Product.find_by(name: name)
-                
-                if product
-                  # Если продукт существует, обновляем его
-                  product.update!(
-                    description: description,
-                    price: sale_price,
-                    image_url: image_url,
-                    is_sale: true,
-                    sale_price: sale_price,
-                    original_price: regular_price
-                  )
-                else
-                  # Если продукт не существует, создаем новый
-                  product = Product.create!(
-                    name: name,
-                    description: description,
-                    price: sale_price,
-                    image_url: image_url,
-                    category: category,
-                    is_sale: true,
-                    sale_price: sale_price,
-                    original_price: regular_price
-                  )
-                end
+                # Создаем новый продукт
+                product = Product.create!(
+                  name: name,
+                  description: description,
+                  price: sale_price,
+                  image_url: image_url,
+                  category: category,
+                  is_sale: true,
+                  sale_price: sale_price,
+                  original_price: regular_price
+                )
                 
                 # Добавляем товар в категорию акций
                 sale_category = Category.find_by(name: '🏷️ Акции')
@@ -177,32 +162,17 @@ class MenuScraper
                 regular_price = regular_price_element&.text || price_element.text
                 regular_price = regular_price.gsub(/[^\d,]/, '').gsub(',', '.').to_f
                 
-                # Проверяем, существует ли продукт с таким названием
-                product = Product.find_by(name: name)
-                
-                if product
-                  # Если продукт существует, обновляем его
-                  product.update!(
-                    description: description,
-                    price: regular_price,
-                    image_url: image_url,
-                    is_sale: false,
-                    sale_price: regular_price,
-                    original_price: regular_price
-                  )
-                else
-                  # Если продукт не существует, создаем новый
-                  Product.create!(
-                    name: name,
-                    description: description,
-                    price: regular_price,
-                    image_url: image_url,
-                    category: category,
-                    is_sale: false,
-                    sale_price: regular_price,
-                    original_price: regular_price
-                  )
-                end
+                # Создаем новый продукт
+                Product.create!(
+                  name: name,
+                  description: description,
+                  price: regular_price,
+                  image_url: image_url,
+                  category: category,
+                  is_sale: false,
+                  sale_price: regular_price,
+                  original_price: regular_price
+                )
                 
                 price = regular_price
               end
@@ -240,5 +210,5 @@ end
 
 # Запускаем парсер, если файл запущен напрямую
 if __FILE__ == $0
-  MenuScraper.scrape_menu
-end 
+  MenuScraperLight.scrape_menu
+end
