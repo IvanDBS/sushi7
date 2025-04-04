@@ -41,7 +41,7 @@ ActiveRecord::Schema.define do
   end
 
   create_table :users, if_not_exists: true do |t|
-    t.integer :telegram_id
+    t.bigint :telegram_id
     t.string :first_name
     t.string :last_name
     t.string :username

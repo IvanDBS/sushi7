@@ -1,4 +1,4 @@
---
+qgHeP7KiUgJXmLMtMfvx--
 -- PostgreSQL database dump
 --
 
@@ -246,7 +246,7 @@ ALTER TABLE public.schema_migrations OWNER TO ivan;
 
 CREATE TABLE public.users (
     id bigint NOT NULL,
-    telegram_id integer,
+    telegram_id bigint,
     first_name character varying,
     last_name character varying,
     username character varying,
