@@ -42,9 +42,40 @@ The bot includes several administrative commands for managing products:
 - `/remove_sale [id]` - Remove a product from sale
 - `/sale_products` - Show a list of all products on sale
 
+## База данных
+
+Проект использует PostgreSQL для хранения данных. База данных создается автоматически при первом запуске скрапера.
+
+### Структура базы данных
+
+- `categories` - категории товаров
+- `products` - товары
+- `product_categories` - связи между товарами и категориями
+- `users` - пользователи бота
+- `orders` - заказы
+- `order_items` - позиции в заказе
+
+### Локальная разработка
+
+Для локальной разработки используется PostgreSQL. База данных создается автоматически при первом запуске скрапера.
+
 ## Структура проекта
 
-- `lib/bot.rb` - основной файл бота
-- `lib/models.rb` - модели данных
-- `lib/scraper.rb` - парсер меню с сайта
-- `db/sushi_bot.sqlite3` - база данных 
+```
+sushi7/
+├── lib/
+│   ├── bot.rb           # Основной файл бота
+│   ├── scraper.rb       # Скрапер для парсинга меню
+│   ├── models.rb        # Модели базы данных
+│   ├── ingredients.rb   # Обработка ингредиентов
+│   └── admin_commands.rb # Административные команды
+├── db/
+│   ├── migrations/      # Миграции базы данных
+│   ├── schema.sql      # Схема базы данных
+│   └── data.sql        # Начальные данные
+├── config/
+│   └── database.yml    # Конфигурация базы данных
+├── Gemfile             # Зависимости проекта
+├── docker-compose.dev.yml # Конфигурация Docker для разработки
+└── README.md           # Документация проекта
+``` 
