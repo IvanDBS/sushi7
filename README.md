@@ -30,6 +30,18 @@ ruby lib/bot.rb
 - Оформление заказов
 - Уведомления администратору о новых заказах
 
+## Admin Commands
+
+The bot includes several administrative commands for managing products:
+
+- `/list_products` - Show a list of all products with their IDs and prices
+- `/find_product [name]` - Find a product by name
+- `/product_info [id]` - Show detailed information about a product
+- `/edit_price [id] [new_price]` - Change the regular price of a product
+- `/set_sale [id] [sale_price]` - Set a sale price for a product
+- `/remove_sale [id]` - Remove a product from sale
+- `/sale_products` - Show a list of all products on sale
+
 ## Структура проекта
 
 - `lib/bot.rb` - основной файл бота
