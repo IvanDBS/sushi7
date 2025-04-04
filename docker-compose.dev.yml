@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "9292:9292"
+    environment:
+      - POSTGRES_HOST=db
+      - POSTGRES_USER=sushi_bot
+      - POSTGRES_PASSWORD=sushi_bot_password
+      - POSTGRES_DATABASE=sushi7_development
+      - RACK_ENV=development
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - ADMIN_CHAT_ID=${ADMIN_CHAT_ID}
+    depends_on:
+      - db
+    volumes:
+      - .:/app
+    restart: always
+
+  db:
+    image: postgres:15
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=sushi_bot
+      - POSTGRES_PASSWORD=sushi_bot_password
+      - POSTGRES_DB=sushi7_development
+    restart: always
+
+volumes:
+  postgres_data: 

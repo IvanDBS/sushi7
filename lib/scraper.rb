@@ -11,6 +11,10 @@ class MenuScraper
     Product.delete_all
     Category.delete_all
     
+    # Сбрасываем последовательность ID
+    ActiveRecord::Base.connection.execute("ALTER SEQUENCE products_id_seq RESTART WITH 1;")
+    ActiveRecord::Base.connection.execute("ALTER SEQUENCE categories_id_seq RESTART WITH 1;")
+    
     begin
       # Создаем основные категории вручную
       categories = {
@@ -61,41 +65,19 @@ class MenuScraper
       
       doc = Nokogiri::HTML(response.body)
       
-      doc.css('.product, .type-product').each do |product_element|
+      # Обновленные селекторы для новой структуры сайта
+      doc.css('.product-small:not(.product), .product:not(.product-small)').each do |product_element|
         begin
-          name = product_element.css('.woocommerce-loop-product__title, .product-title').text.strip
+          name = product_element.css('.product-title, .woocommerce-loop-product__title').text.strip
           puts "  Обработка продукта: #{name}"
-          
-          # Парсим цену
-          price_element = product_element.css('.price').first
-          price = if price_element
-            # Сначала проверяем наличие акционной цены
-            sale_price = price_element.css('ins .amount').text.strip
-            if !sale_price.empty?
-              # Если есть акционная цена, используем её
-              sale_price.gsub(/[^\d.]/, '').to_f
-            else
-              # Если нет акционной цены, используем обычную цену
-              regular_price = price_element.css('.amount').first&.text || price_element.text
-              regular_price.gsub(/[^\d.]/, '').to_f
-            end
-          else
-            0.0
-          end
-          
-          # Проверяем, что цена выглядит разумной
-          if price > 1000
-            puts "    ⚠️ Подозрительно высокая цена (#{price}), проверьте вручную"
-          end
           
           # Получаем изображение
           image = product_element.css('img').first
           image_url = image['src'] if image
           
-          # Получаем ссылку на страницу продукта
-          product_link = product_element.css('a').first
-          
+          # Получаем ссылку на страницу продукта и описание
           description = ""
+          product_link = product_element.css('a').first
           if product_link
             product_url = product_link['href']
             puts "    Загрузка страницы продукта: #{product_url}"
@@ -106,28 +88,117 @@ class MenuScraper
             )
             if product_response.code == 200
               product_doc = Nokogiri::HTML(product_response.body)
-              description = product_doc.css('.woocommerce-product-details__short-description, .product-short-description, .product-description').text.strip
+              
+              # Пробуем найти описание в разных местах, но берем только первое найденное
+              description_element = product_doc.css('.woocommerce-product-details__short-description, .product-short-description, .product-description').first
+              if description_element
+                description = description_element.text.strip
+              end
+              
+              # Если не нашли, пробуем альтернативные места
+              if description.empty?
+                description_element = product_doc.css('.product-short-description, .description').first
+                if description_element
+                  description = description_element.text.strip
+                end
+              end
+              
+              # Очищаем описание от лишних пробелов и переносов строк
               description = description.gsub(/\s+/, ' ').strip
               
-              # Если описание пустое, попробуем найти его в других местах
-              if description.empty?
-                description = product_doc.css('.product-short-description, .description').text.strip
-                description = description.gsub(/\s+/, ' ').strip
-              end
+              # Если описание все еще пустое, используем название продукта
+              description = name if description.empty?
             end
           end
           
-          # Если описание все еще пустое, используем название продукта
-          description = name if description.empty?
+          # Парсим цену
+          price_element = product_element.css('.price, .amount').first
+          if price_element
+            # Сначала проверяем наличие акционной цены
+            sale_price_element = price_element.css('ins .amount').first
+            regular_price_element = price_element.css('.amount').first
+            
+            if sale_price_element
+              # Если есть акционная цена
+              sale_price = sale_price_element.text.strip.gsub(/[^\d,]/, '').gsub(',', '.').to_f
+              regular_price = regular_price_element.text.strip.gsub(/[^\d,]/, '').gsub(',', '.').to_f
+              
+              # Проверяем, существует ли продукт с таким названием
+              product = Product.find_by(name: name)
+              
+              if product
+                # Если продукт существует, обновляем его
+                product.update!(
+                  description: description,
+                  price: sale_price,
+                  image_url: image_url,
+                  is_sale: true,
+                  sale_price: sale_price,
+                  original_price: regular_price
+                )
+              else
+                # Если продукт не существует, создаем новый
+                product = Product.create!(
+                  name: name,
+                  description: description,
+                  price: sale_price,
+                  image_url: image_url,
+                  category: category,
+                  is_sale: true,
+                  sale_price: sale_price,
+                  original_price: regular_price
+                )
+              end
+              
+              # Добавляем товар в категорию акций
+              sale_category = Category.find_by(name: '🏷️ Акции')
+              if sale_category
+                product.categories << sale_category unless product.categories.include?(sale_category)
+              end
+              
+              price = sale_price
+            else
+              # Если нет акционной цены
+              regular_price = regular_price_element&.text || price_element.text
+              regular_price = regular_price.gsub(/[^\d,]/, '').gsub(',', '.').to_f
+              
+              # Проверяем, существует ли продукт с таким названием
+              product = Product.find_by(name: name)
+              
+              if product
+                # Если продукт существует, обновляем его
+                product.update!(
+                  description: description,
+                  price: regular_price,
+                  image_url: image_url,
+                  is_sale: false,
+                  sale_price: regular_price,
+                  original_price: regular_price
+                )
+              else
+                # Если продукт не существует, создаем новый
+                Product.create!(
+                  name: name,
+                  description: description,
+                  price: regular_price,
+                  image_url: image_url,
+                  category: category,
+                  is_sale: false,
+                  sale_price: regular_price,
+                  original_price: regular_price
+                )
+              end
+              
+              price = regular_price
+            end
+          else
+            price = 0.0
+          end
           
-          # Создаем продукт
-          Product.create!(
-            name: name,
-            description: description,
-            price: price,
-            image_url: image_url,
-            category: category
-          )
+          # Проверяем, что цена выглядит разумной
+          if price > 1000
+            puts "    ⚠️ Подозрительно высокая цена (#{price}), проверьте вручную"
+          end
           
           puts "    ✓ Цена: #{price} MDL"
           puts "    ✓ Описание: #{description[0..50]}..."

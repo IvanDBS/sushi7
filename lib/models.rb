@@ -28,6 +28,15 @@ ActiveRecord::Schema.define do
     t.decimal :price, precision: 10, scale: 2
     t.string :image_url
     t.references :category, foreign_key: true
+    t.boolean :is_sale, default: false
+    t.decimal :sale_price, precision: 10, scale: 2
+    t.decimal :original_price, precision: 10, scale: 2
+    t.timestamps
+  end
+
+  create_table :product_categories, if_not_exists: true do |t|
+    t.references :product
+    t.references :category
     t.timestamps
   end
 
@@ -65,11 +74,13 @@ end
 # Модель категории меню
 class Category < ActiveRecord::Base
   has_many :products
+  has_and_belongs_to_many :products, join_table: :product_categories
 end
 
 # Модель продукта
 class Product < ActiveRecord::Base
   belongs_to :category
+  has_and_belongs_to_many :categories, join_table: :product_categories
   has_many :order_items
 end
 

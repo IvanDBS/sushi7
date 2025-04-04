@@ -6,10 +6,13 @@ require_relative 'maib_client'
 require_relative 'maib_client_test'
 require_relative 'translations'
 require_relative 'ingredients'
+require_relative 'admin_commands'
 require 'http'
 require 'tempfile'
 
 class SushiBot
+  include AdminCommands
+
   def initialize
     @token = ENV['TELEGRAM_BOT_TOKEN']
     @admin_chat_id = ENV['ADMIN_CHAT_ID']
@@ -67,6 +70,9 @@ class SushiBot
   private
 
   def handle_message(bot, message, user)
+    # Сначала проверяем, не является ли это админской командой
+    return if handle_admin_command(bot, message, user)
+
     case message.text
     when '/start'
       send_welcome_message(bot, message)
@@ -133,11 +139,28 @@ class SushiBot
                 message_or_callback.chat.id
               end
 
-    bot.api.send_message(
-      chat_id: chat_id,
-      text: Translations.t('select_category', user.language),
-      reply_markup: markup
-    )
+    if message_or_callback.is_a?(Telegram::Bot::Types::CallbackQuery)
+      begin
+        bot.api.edit_message_text(
+          chat_id: chat_id,
+          message_id: message_or_callback.message.message_id,
+          text: Translations.t('select_category', user.language),
+          reply_markup: markup
+        )
+      rescue
+        bot.api.send_message(
+          chat_id: chat_id,
+          text: Translations.t('select_category', user.language),
+          reply_markup: markup
+        )
+      end
+    else
+      bot.api.send_message(
+        chat_id: chat_id,
+        text: Translations.t('select_category', user.language),
+        reply_markup: markup
+      )
+    end
   end
 
   def show_settings(bot, message)
@@ -193,6 +216,13 @@ class SushiBot
     products = Product.where(category_id: category_id)
     category = Category.find(category_id)
     
+    # Для категории "Акции" показываем товары через связь many-to-many
+    if category.name == '🏷️ Акции'
+      products = Product.joins(:categories)
+                      .where(categories: { id: category_id })
+                      .where(is_sale: true)
+    end
+    
     buttons = products.map do |product|
       [Telegram::Bot::Types::InlineKeyboardButton.new(
         text: "#{product.name} — #{product.price} MDL",
@@ -207,47 +237,63 @@ class SushiBot
     
     markup = Telegram::Bot::Types::InlineKeyboardMarkup.new(inline_keyboard: buttons)
     
-    bot.api.send_message(
-      chat_id: callback_query.from.id,
-      text: Translations.t('select_dish', user.language) % { category: category.name },
-      reply_markup: markup
-    )
+    begin
+      bot.api.edit_message_text(
+        chat_id: callback_query.message.chat.id,
+        message_id: callback_query.message.message_id,
+        text: Translations.t('select_dish', user.language) % { category: category.name },
+        reply_markup: markup
+      )
+    rescue
+      bot.api.send_message(
+        chat_id: callback_query.from.id,
+        text: Translations.t('select_dish', user.language) % { category: category.name },
+        reply_markup: markup
+      )
+    end
   end
 
   def show_product_details(bot, callback_query, product_id)
     user = User.find_by(telegram_id: callback_query.from.id)
     product = Product.find(product_id)
-    order = user.orders.find_or_create_by(status: 'cart')
-    order_item = order.order_items.find_by(product: product)
-    current_quantity = order_item&.quantity || 0
-    
-    # Форматируем цену
-    price_text = case user.language
+    order = Order.find_or_create_by(user: user, status: 'cart')
+
+    # Формируем текст сообщения
+    text = case user.language
     when 'ru'
-      "Цена: #{product.price} лей"
+      "#{product.name}\n\n#{product.description}\n\nЦена: #{product.is_sale ? product.sale_price : product.price} MDL"
     when 'ro'
-      "Preț: #{product.price} lei"
+      "#{product.name}\n\n#{product.description}\n\nPreț: #{product.is_sale ? product.sale_price : product.price} MDL"
     when 'en'
-      "Price: #{product.price} MDL"
+      "#{product.name}\n\n#{product.description}\n\nPrice: #{product.is_sale ? product.sale_price : product.price} MDL"
     end
 
-    # Переводим только ингредиенты в описании
-    description = translate_ingredients(product.description, user.language)
-
-    # Форматируем сообщение с учетом языка
-    message = "#{product.name}\n\n"
-    message += "#{description}\n\n"
-    message += price_text
-
+    # Добавляем кнопки для управления количеством
     buttons = []
     
-    if current_quantity > 0
+    # Находим существующий товар в корзине
+    cart_item = order.order_items.find_by(product: product)
+    
+    if cart_item
+      quantity = cart_item.quantity
+      
+      # Кнопки изменения количества
       buttons << [
-        Telegram::Bot::Types::InlineKeyboardButton.new(text: "➖", callback_data: "quantity_#{product.id}_-1"),
-        Telegram::Bot::Types::InlineKeyboardButton.new(text: "#{current_quantity}", callback_data: "current_quantity"),
-        Telegram::Bot::Types::InlineKeyboardButton.new(text: "➕", callback_data: "quantity_#{product.id}_1")
+        Telegram::Bot::Types::InlineKeyboardButton.new(
+          text: "➖",
+          callback_data: "quantity_#{product.id}_-1"
+        ),
+        Telegram::Bot::Types::InlineKeyboardButton.new(
+          text: "#{quantity} шт.",
+          callback_data: "dummy"
+        ),
+        Telegram::Bot::Types::InlineKeyboardButton.new(
+          text: "➕",
+          callback_data: "quantity_#{product.id}_1"
+        )
       ]
     else
+      # Кнопка добавления в корзину
       add_text = case user.language
       when 'ru'
         "Добавить в корзину"
@@ -287,61 +333,48 @@ class SushiBot
     end
 
     # Get category name for back button
-    category = Category.find(product.category_id)
-    translated_category = Translations::TRANSLATIONS[user.language.to_sym]&.dig(:categories, category.name) || category.name
-
-    buttons << [
-      Telegram::Bot::Types::InlineKeyboardButton.new(
-        text: "🔙 #{translated_category}",
-        callback_data: "category_#{product.category_id}"
-      )
-    ]
+    category = product.category
+    buttons << [Telegram::Bot::Types::InlineKeyboardButton.new(
+      text: Translations.t('back_to_menu', user.language),
+      callback_data: "category_#{category.id}"
+    )]
 
     markup = Telegram::Bot::Types::InlineKeyboardMarkup.new(inline_keyboard: buttons)
 
-    begin
-      if product.image_url
-        puts "Attempting to send photo for product #{product.name} (ID: #{product.id})"
-        puts "Image URL: #{product.image_url}"
-        
-        begin
-          bot.api.send_photo(
-            chat_id: callback_query.message.chat.id,
-            photo: product.image_url,
-            caption: message,
-            reply_markup: markup
-          )
-          puts "Successfully sent photo for product #{product.name}"
-        rescue => e
-          puts "Failed to send photo for product #{product.name}: #{e.message}"
-          # If photo sending fails, send text-only
-          bot.api.send_message(
-            chat_id: callback_query.message.chat.id,
-            text: message,
-            reply_markup: markup
-          )
-        end
-      else
-        puts "No image URL for product #{product.name}"
-        # If no image URL, send text-only
-        bot.api.send_message(
+    # Отправляем сообщение с фото, если есть
+    if product.image_url.present?
+      begin
+        bot.api.edit_message_media(
           chat_id: callback_query.message.chat.id,
-          text: message,
+          message_id: callback_query.message.message_id,
+          media: Telegram::Bot::Types::InputMediaPhoto.new(
+            media: product.image_url,
+            caption: text
+          ),
+          reply_markup: markup
+        )
+      rescue
+        bot.api.send_photo(
+          chat_id: callback_query.from.id,
+          photo: product.image_url,
+          caption: text,
           reply_markup: markup
         )
       end
-    rescue => e
-      puts "Error in show_product_details for product #{product.name}: #{e.message}"
-      puts e.backtrace
-      # Fallback: try to send text-only message
+    else
       begin
-        bot.api.send_message(
+        bot.api.edit_message_text(
           chat_id: callback_query.message.chat.id,
-          text: message,
+          message_id: callback_query.message.message_id,
+          text: text,
           reply_markup: markup
         )
-      rescue => e
-        puts "Failed to send fallback message: #{e.message}"
+      rescue
+        bot.api.send_message(
+          chat_id: callback_query.from.id,
+          text: text,
+          reply_markup: markup
+        )
       end
     end
   end
@@ -382,7 +415,16 @@ class SushiBot
     buttons = []
     total = 0
 
-    order.order_items.each do |item|
+    # Фильтруем товары, которые все еще существуют в базе данных
+    valid_items = order.order_items.select { |item| item.product.present? }
+    
+    # Если есть недействительные товары, удаляем их из корзины
+    if valid_items.length < order.order_items.length
+      invalid_items = order.order_items - valid_items
+      invalid_items.each { |item| item.destroy }
+    end
+
+    valid_items.each do |item|
       subtotal = item.quantity * item.price
       total += subtotal
       
@@ -701,7 +743,7 @@ class SushiBot
     order = user.orders.find_or_create_by(status: 'cart')
     order_item = order.order_items.find_or_create_by(product: product) do |item|
       item.quantity = 1
-      item.price = product.price
+      item.price = product.is_sale ? product.sale_price : product.price
     end
 
     bot.api.answer_callback_query(

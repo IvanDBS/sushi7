@@ -223,9 +223,6 @@ module Ingredients
 
         # Супы и их ингредиенты
         'bulion' => 'broth',
-        'bulion ramen' => 'ramen broth',
-        'bulion tom yum' => 'tom yum broth',
-        'bulion miso' => 'miso broth',
         'tăiței' => 'noodles',
         'tăiței ramen' => 'ramen noodles',
         'tăiței udon' => 'udon noodles',
