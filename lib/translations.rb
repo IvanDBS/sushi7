@@ -30,6 +30,7 @@ module Translations
       quantity_updated: "✅ Количество обновлено: %{quantity}",
       payment_link: "💳 Для оплаты перейдите по ссылке: %{url}",
       payment_error: "❌ Произошла ошибка при создании платежа. Пожалуйста, попробуйте позже.",
+      card_payment_unavailable: "❌ Оплата картой временно недоступна. Пожалуйста, выберите оплату наличными при получении.",
       categories: {
         "🍱 Сеты" => "🍱 Сеты",
         "🍣 Суши" => "🍣 Суши",
@@ -42,7 +43,13 @@ module Translations
         "🥤 Напитки" => "🥤 Напитки",
         "🍰 Десерты" => "🍰 Десерты",
         "🏷️ Акции" => "🏷️ Акции"
-      }
+      },
+      delivery_button: "🚚 Доставка",
+      delivery: "🚚 *Доставка*\n\nМы рады доставить вам отличное суши прямо к вам домой в различных районах Кишинева и пригорода. Чтобы вы могли насладиться аутентичным вкусом качества, мы разделили регионы доставки следующим образом:\n\n📍 *Зона 1: Кишинев*\nСтоимость доставки: 50 лей\n\nБесплатная доставка для заказов свыше 500 лей\n\nПримерное время: 50–80 минут\n\n🏡 *Зона 2: Пригород*\nСтоимость доставки: 80 лей\n\nБесплатная доставка для заказов свыше 800 лей\n\nПримерное время: 70–90 минут\n\n⏰ Время доставки является приблизительным и может варьироваться в зависимости от объема заказов (праздники, выходные), погодных условий или трафика.\n\nКоманда Oh!MySushi гарантирует серьезность и оперативность — мы делаем все возможное, чтобы ваш заказ прибыл вовремя! 🍣",
+      select_delivery_zone: "📍 Выберите регион доставки:",
+      delivery_fee: "💵 Стоимость доставки: %{fee}",
+      free_delivery: "✅ Доставка бесплатна",
+      free_delivery_threshold: "🆓 Бесплатная доставка при заказе от %{threshold}"
     },
     ro: {
       welcome: "Bine ați venit la Oh! My Sushi! 🍱\n\nDeschideți meniul și alegeți preparatul perfect! 👇",
@@ -74,6 +81,7 @@ module Translations
       quantity_updated: "✅ Cantitate actualizată: %{quantity}",
       payment_link: "💳 Pentru plată, accesați linkul: %{url}",
       payment_error: "❌ A apărut o eroare la crearea plății. Vă rugăm să încercați din nou.",
+      card_payment_unavailable: "❌ Plata cu cardul este temporar indisponibilă. Vă rugăm să alegeți plata cash la livrare.",
       categories: {
         "🍱 Сеты" => "🍱 Seturi",
         "🍣 Суши" => "🍣 Sushi",
@@ -86,7 +94,13 @@ module Translations
         "🥤 Напитки" => "🥤 Băuturi",
         "🍰 Десерты" => "🍰 Deserturi",
         "🏷️ Акции" => "🏷️ Reduceri"
-      }
+      },
+      delivery_button: "🚚 Livrare",
+      delivery: "🚚 *Livrare*\n\nSuntem bucuroși să îți aducem sushi excepțional direct la tine, în diverse zone din Chișinău și suburbii. Pentru a te bucura de gustul autentic al calității, am împărțit zonele de livrare astfel:\n\n📍 *Zona 1: or. Chișinău*\nTaxa de livrare: 50 lei\n\nPentru comenzile cu o valoare de peste 500 lei, livrarea este gratuită.\n\nTimp estimativ: 50–80 minute\n\n🏡 *Zona 2: suburbii*\nTaxa de livrare este 80 lei.\nPentru comenzile cu o valoare de peste 800 lei, livrarea este gratuită.\n\nTimp estimativ: 70–90 minute\n\n⏰ Timpul de livrare este estimativ și poate varia în funcție de volumul comenzilor (sărbători, weekend), de condițiile meteo sau trafic.\n\nEchipa Oh!MySushi îți garantează seriozitate și promptitudine — facem tot posibilul ca comanda ta să ajungă la timp! 🍣",
+      select_delivery_zone: "📍 Alegeți zona de livrare:",
+      delivery_fee: "💵 Taxa de livrare: %{fee}",
+      free_delivery: "✅ Livrare gratuită",
+      free_delivery_threshold: "🆓 Livrare gratuită pentru comenzi peste %{threshold}"
     },
     en: {
       welcome: "Welcome to Oh! My Sushi! 🍱\n\nOpen the menu and choose your perfect dish! 👇",
@@ -118,6 +132,7 @@ module Translations
       quantity_updated: "✅ Quantity updated: %{quantity}",
       payment_link: "💳 For payment, follow the link: %{url}",
       payment_error: "❌ An error occurred while creating the payment. Please try again.",
+      card_payment_unavailable: "❌ Card payment is temporarily unavailable. Please choose cash on delivery.",
       categories: {
         "🍱 Сеты" => "🍱 Sets",
         "🍣 Суши" => "🍣 Sushi",
@@ -130,7 +145,13 @@ module Translations
         "🥤 Напитки" => "🥤 Drinks",
         "🍰 Десерты" => "🍰 Desserts",
         "🏷️ Акции" => "🏷️ Specials"
-      }
+      },
+      delivery_button: "🚚 Delivery",
+      delivery: "🚚 *Delivery*\n\nWe are happy to bring you exceptional sushi directly to your home in various areas of Chisinau and suburbs. To enjoy the authentic taste of quality, we have divided the delivery zones as follows:\n\n📍 *Zone 1: Chisinau*\nDelivery fee: 50 MDL\n\nFree delivery for orders over 500 MDL\n\nEstimated time: 50–80 minutes\n\n🏡 *Zone 2: Suburbs*\nDelivery fee: 80 MDL\n\nFree delivery for orders over 800 MDL\n\nEstimated time: 70–90 minutes\n\n⏰ Delivery time is estimated and may vary depending on order volume (holidays, weekends), weather conditions or traffic.\n\nThe Oh!MySushi team guarantees seriousness and promptness — we do our best to ensure your order arrives on time! 🍣",
+      select_delivery_zone: "📍 Select delivery zone:",
+      delivery_fee: "💵 Delivery fee: %{fee}",
+      free_delivery: "✅ Free delivery",
+      free_delivery_threshold: "🆓 Free delivery for orders over %{threshold}"
     }
   }
 

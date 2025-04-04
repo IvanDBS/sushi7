@@ -92,8 +92,32 @@ end
 # Модель заказа
 class Order < ActiveRecord::Base
   belongs_to :user
-  has_many :order_items
+  has_many :order_items, dependent: :destroy
   has_many :products, through: :order_items
+
+  DELIVERY_ZONES = {
+    'chisinau' => {
+      'ru' => { name: 'Кишинев', fee: 50, free_threshold: 500 },
+      'ro' => { name: 'Chișinău', fee: 50, free_threshold: 500 },
+      'en' => { name: 'Chisinau', fee: 50, free_threshold: 500 }
+    },
+    'suburbs' => {
+      'ru' => { name: 'Пригород', fee: 80, free_threshold: 800 },
+      'ro' => { name: 'Suburbii', fee: 80, free_threshold: 800 },
+      'en' => { name: 'Suburbs', fee: 80, free_threshold: 800 }
+    }
+  }
+
+  def delivery_fee
+    return 0 if delivery_zone.nil?
+    zone_info = DELIVERY_ZONES[delivery_zone][user.language]
+    total = order_items.sum('quantity * price')
+    total >= zone_info[:free_threshold] ? 0 : zone_info[:fee]
+  end
+
+  def total_with_delivery
+    order_items.sum('quantity * price') + delivery_fee
+  end
 
   def total_amount
     order_items.sum('quantity * price')
@@ -118,6 +142,14 @@ class Order < ActiveRecord::Base
       payment_status: payload['result']['status'],
       status: payload['result']['status'] == 'success' ? 'paid' : 'payment_failed'
     )
+  end
+
+  def total
+    order_items.sum('quantity * price')
+  end
+
+  def language
+    user.language
   end
 end
 

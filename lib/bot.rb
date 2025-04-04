@@ -184,11 +184,15 @@ class SushiBot
       end
     end
 
-    # Добавляем кнопку контактов
+    # Добавляем кнопки контактов и доставки
     buttons << [
       Telegram::Bot::Types::InlineKeyboardButton.new(
         text: Translations.t('contacts_button', user.language),
         callback_data: 'show_contacts'
+      ),
+      Telegram::Bot::Types::InlineKeyboardButton.new(
+        text: Translations.t('delivery_button', user.language),
+        callback_data: 'show_delivery'
       )
     ]
     
@@ -207,6 +211,16 @@ class SushiBot
       chat_id: callback_query.message.chat.id,
       message_id: callback_query.message.message_id,
       text: Translations.t('contacts', user.language),
+      parse_mode: 'Markdown'
+    )
+  end
+
+  def show_delivery(bot, callback_query)
+    user = User.find_by(telegram_id: callback_query.from.id)
+    bot.api.edit_message_text(
+      chat_id: callback_query.message.chat.id,
+      message_id: callback_query.message.message_id,
+      text: Translations.t('delivery', user.language),
       parse_mode: 'Markdown'
     )
   end
@@ -250,6 +264,24 @@ class SushiBot
         text: Translations.t('select_dish', user.language) % { category: category.name },
         reply_markup: markup
       )
+    end
+  end
+
+  def valid_image_url?(url)
+    return false unless url && url.is_a?(String)
+    
+    begin
+      response = HTTP.head(url)
+      if response.status.success? && response.mime_type.start_with?('image/')
+        # Дополнительная проверка: пробуем загрузить изображение
+        image_response = HTTP.get(url)
+        image_response.status.success? && image_response.body.to_s.length > 0
+      else
+        false
+      end
+    rescue => e
+      puts "Error checking image URL #{url}: #{e.message}"
+      false
     end
   end
 
@@ -353,11 +385,13 @@ class SushiBot
           ),
           reply_markup: markup
         )
-      rescue
-        bot.api.send_photo(
-          chat_id: callback_query.from.id,
-          photo: product.image_url,
-          caption: text,
+      rescue => e
+        puts "Ошибка при отправке фото: #{e.message}"
+        # Если не удалось отправить фото, отправляем только текст
+        bot.api.edit_message_text(
+          chat_id: callback_query.message.chat.id,
+          message_id: callback_query.message.message_id,
+          text: text,
           reply_markup: markup
         )
       end
@@ -413,7 +447,7 @@ class SushiBot
 
     text = "#{Translations.t('cart', user.language)}:\n\n"
     buttons = []
-    total = 0
+    subtotal = 0
 
     # Фильтруем товары, которые все еще существуют в базе данных
     valid_items = order.order_items.select { |item| item.product.present? }
@@ -425,12 +459,12 @@ class SushiBot
     end
 
     valid_items.each do |item|
-      subtotal = item.quantity * item.price
-      total += subtotal
+      item_total = item.quantity * item.price
+      subtotal += item_total
       
       buttons << [
         Telegram::Bot::Types::InlineKeyboardButton.new(
-          text: "#{item.product.name} - #{item.quantity} × #{item.price} = #{subtotal} #{currency}",
+          text: "#{item.product.name} - #{item.quantity} × #{item.price} = #{item_total} #{currency}",
           callback_data: "current_quantity"
         )
       ]
@@ -451,7 +485,20 @@ class SushiBot
       ]
     end
 
-    text += Translations.t('cart_total', user.language) % { total: "#{total} #{currency}" }
+    # Добавляем информацию о доставке, если зона выбрана
+    if order.delivery_zone
+      zone_info = Order::DELIVERY_ZONES[order.delivery_zone][user.language]
+      delivery_fee = order.delivery_fee
+      text += "\n📍 #{zone_info[:name]}\n"
+      if delivery_fee > 0
+        text += Translations.t('delivery_fee', user.language) % { fee: "#{delivery_fee} #{currency}" }
+        text += "\n#{Translations.t('free_delivery_threshold', user.language) % { threshold: "#{zone_info[:free_threshold]} #{currency}" }}\n"
+      else
+        text += Translations.t('free_delivery', user.language) + "\n"
+      end
+    end
+
+    text += "\n#{Translations.t('cart_total', user.language) % { total: "#{order.total_with_delivery} #{currency}" }}"
 
     buttons << [
       Telegram::Bot::Types::InlineKeyboardButton.new(
@@ -500,10 +547,51 @@ class SushiBot
     return unless order
 
     user.orders.where(status: ['cart', 'checkout']).where.not(id: order.id).update_all(status: 'cancelled')
-    order.update(status: 'checkout', checkout_step: 'phone')
+    order.update(status: 'checkout', checkout_step: 'delivery_zone')
+    
+    show_delivery_zones(bot, callback_query.message.chat.id, user)
+  end
+
+  def show_delivery_zones(bot, chat_id, user)
+    order = user.orders.find_by(status: 'checkout')
+    buttons = Order::DELIVERY_ZONES.map do |zone_key, zone_info|
+      # Add green checkmark if this zone is selected
+      checkmark = order&.delivery_zone == zone_key ? "✅ " : ""
+      
+      # Calculate delivery fee based on order total
+      fee = if order&.total_amount && order.total_amount >= zone_info[user.language][:free_threshold]
+        0
+      else
+        zone_info[user.language][:fee]
+      end
+      
+      [Telegram::Bot::Types::InlineKeyboardButton.new(
+        text: "#{checkmark}#{zone_info[user.language][:name]} (#{fee} #{user.language == 'ru' ? 'лей' : user.language == 'ro' ? 'lei' : 'MDL'})",
+        callback_data: "delivery_zone_#{zone_key}"
+      )]
+    end
+
+    markup = Telegram::Bot::Types::InlineKeyboardMarkup.new(inline_keyboard: buttons)
     
     bot.api.send_message(
-      chat_id: callback_query.from.id,
+      chat_id: chat_id,
+      text: Translations.t('select_delivery_zone', user.language),
+      reply_markup: markup
+    )
+  end
+
+  def handle_delivery_zone(bot, callback_query, user, zone)
+    order = user.orders.find_by(status: 'checkout')
+    return unless order
+
+    order.update(delivery_zone: zone, checkout_step: 'phone')
+    
+    # Show updated delivery zones with checkmark
+    show_delivery_zones(bot, callback_query.message.chat.id, user)
+    
+    # Then ask for phone number
+    bot.api.send_message(
+      chat_id: callback_query.message.chat.id,
       text: Translations.t('enter_phone', user.language)
     )
   end
@@ -558,6 +646,10 @@ class SushiBot
     admin_message += " (@#{callback_query.from.username})" if callback_query.from.username
     admin_message += "\n"
     admin_message += "📱 Телефон: #{order.phone}\n"
+    
+    # Add delivery zone information
+    zone_info = Order::DELIVERY_ZONES[order.delivery_zone][user.language]
+    admin_message += "📍 Регион доставки: #{zone_info[:name]}\n"
     admin_message += "📍 Адрес: #{order.address}\n"
     admin_message += "💭 Комментарий: #{order.comment}\n" if order.comment.present? && order.comment != '-'
     admin_message += "💰 Оплата: #{order.payment_method == 'cash' ? 'Наличными при получении' : 'Картой'}\n\n"
@@ -569,7 +661,13 @@ class SushiBot
       total += subtotal
       admin_message += "- #{item.product.name} x#{item.quantity} = #{subtotal} MDL\n"
     end
-    admin_message += "\n💵 Итого: #{total} MDL"
+    
+    # Add delivery fee and total with delivery
+    delivery_fee = order.delivery_fee
+    total_with_delivery = total + delivery_fee
+    admin_message += "\n💵 Сумма заказа: #{total} MDL"
+    admin_message += "\n🚚 Доставка: #{delivery_fee} MDL"
+    admin_message += "\n💵 Итого с доставкой: #{total_with_delivery} MDL"
 
     buttons = [
       [
@@ -732,8 +830,14 @@ class SushiBot
     when 'show_contacts'
       show_contacts(bot, callback_query)
       bot.api.answer_callback_query(callback_query_id: callback_query.id)
+    when 'show_delivery'
+      show_delivery(bot, callback_query)
+      bot.api.answer_callback_query(callback_query_id: callback_query.id)
     when /^lang_(ru|ro|en)$/
       change_language(bot, callback_query, user, $1)
+      bot.api.answer_callback_query(callback_query_id: callback_query.id)
+    when /^delivery_zone_(chisinau|suburbs)$/
+      handle_delivery_zone(bot, callback_query, user, $1)
       bot.api.answer_callback_query(callback_query_id: callback_query.id)
     end
   end
@@ -822,25 +926,10 @@ class SushiBot
     if payment_method == 'cash'
       complete_order(bot, callback_query, order)
     else
-      client = ENV['MAIB_TEST_MODE'] == 'true' ? MaibClientTest.new : MaibClient.new(
-        ENV['MAIB_PROJECT_ID'],
-        ENV['MAIB_PROJECT_SECRET'],
-        ENV['MAIB_SIGNATURE_KEY']
+      bot.api.send_message(
+        chat_id: callback_query.message.chat.id,
+        text: Translations.t('card_payment_unavailable', user.language)
       )
-      
-      result = client.create_payment(order)
-      
-      if result['status'] == 'success'
-        bot.api.send_message(
-          chat_id: callback_query.message.chat.id,
-          text: Translations.t('payment_link', user.language) % { url: result['redirectUrl'] }
-        )
-      else
-        bot.api.send_message(
-          chat_id: callback_query.message.chat.id,
-          text: Translations.t('payment_error', user.language)
-        )
-      end
     end
   end
 
@@ -885,18 +974,6 @@ class SushiBot
     end
 
     description
-  end
-
-  def valid_image_url?(url)
-    return false unless url && url.is_a?(String)
-    
-    begin
-      response = HTTP.head(url)
-      response.status.success? && response.mime_type.start_with?('image/')
-    rescue => e
-      puts "Error checking image URL #{url}: #{e.message}"
-      false
-    end
   end
 end
 
