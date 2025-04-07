@@ -24,6 +24,13 @@ module Ingredients
         'germeni de verdeață' => 'ростки зелени',
         'micro plante' => 'микрозелень',
         'fierți' => 'вареные',
+        'Fulgi' => 'ролл',
+        'Fulgi de тунец' => 'ролл с тунцом',
+        'amestic' => 'амистик',
+        'lola' => 'лола',
+        'tobiko' => 'тобико',
+        'caviar' => 'икра',
+        
         
         # Соусы
         'sos ponzu' => 'соус понзу',
@@ -36,6 +43,7 @@ module Ingredients
         'sos de nuci' => 'ореховый соус',
         'sos de roșii' => 'томатный соус',
         'maioneză japoneza' => 'японский майонез',
+        'sos spaisy' => 'острый соус',
 
         # Мясо и рыба
         'Mușchi de vită' => 'говяжья вырезка',
@@ -54,8 +62,8 @@ module Ingredients
         # Морепродукты
         'Creveți' => 'Креветки',
         'Creveți fierți' => 'вареные креветки',
-        'coctail fructe de mare' => 'морской коктейль',
-        'cocktail fructe de mare' => 'морской коктейль',
+        'coctail fructe de mare' => 'коктейль из морепродуктов',
+        'cocktail fructe de mare' => 'коктейль из морепродуктов',
         'midii' => 'мидии',
         'crab snow' => 'снежный краб',
         'caviar de somon' => 'икра лосося',
@@ -144,6 +152,13 @@ module Ingredients
         'germeni de verdeață' => 'green sprouts',
         'micro plante' => 'microgreens',
         'fierți' => 'boiled',
+        'Fulgi' => 'roll',
+        'Fulgi de тунец' => 'tuna roll',
+        'amestic' => 'amestic',
+        'lola' => 'lola',
+        'tobiko' => 'tobiko',
+        'caviar' => 'caviar',
+        'de' => 'with',
 
         # Соусы
         'sos ponzu' => 'ponzu sauce',
@@ -156,6 +171,7 @@ module Ingredients
         'sos de nuci' => 'nut sauce',
         'sos de roșii' => 'tomato sauce',
         'maioneză japoneza' => 'japanese mayonnaise',
+        'sos spaisy' => 'spicy sauce',
 
         # Мясо и рыба
         'Mușchi de vită' => 'beef tenderloin',

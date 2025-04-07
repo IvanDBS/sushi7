@@ -144,21 +144,24 @@ class SushiBot
         bot.api.edit_message_text(
           chat_id: chat_id,
           message_id: message_or_callback.message.message_id,
-          text: Translations.t('select_category', user.language),
-          reply_markup: markup
+          text: "`#{Translations.t('select_category', user.language)}`",
+          reply_markup: markup,
+          parse_mode: 'Markdown'
         )
       rescue
         bot.api.send_message(
           chat_id: chat_id,
-          text: Translations.t('select_category', user.language),
-          reply_markup: markup
+          text: "`#{Translations.t('select_category', user.language)}`",
+          reply_markup: markup,
+          parse_mode: 'Markdown'
         )
       end
     else
       bot.api.send_message(
         chat_id: chat_id,
-        text: Translations.t('select_category', user.language),
-        reply_markup: markup
+        text: "`#{Translations.t('select_category', user.language)}`",
+        reply_markup: markup,
+        parse_mode: 'Markdown'
       )
     end
   end
@@ -290,14 +293,17 @@ class SushiBot
     product = Product.find(product_id)
     order = Order.find_or_create_by(user: user, status: 'cart')
 
+    # Переводим описание продукта
+    translated_description = translate_ingredients(product.description, user.language)
+
     # Формируем текст сообщения
     text = case user.language
     when 'ru'
-      "#{product.name}\n\n#{product.description}\n\nЦена: #{product.is_sale ? product.sale_price : product.price} MDL"
+      "#{product.name}\n\n#{translated_description}\n\nЦена: #{product.is_sale ? product.sale_price : product.price} MDL"
     when 'ro'
       "#{product.name}\n\n#{product.description}\n\nPreț: #{product.is_sale ? product.sale_price : product.price} MDL"
     when 'en'
-      "#{product.name}\n\n#{product.description}\n\nPrice: #{product.is_sale ? product.sale_price : product.price} MDL"
+      "#{product.name}\n\n#{translated_description}\n\nPrice: #{product.is_sale ? product.sale_price : product.price} MDL"
     end
 
     # Добавляем кнопки для управления количеством
@@ -366,10 +372,20 @@ class SushiBot
 
     # Get category name for back button
     category = product.category
-    buttons << [Telegram::Bot::Types::InlineKeyboardButton.new(
-      text: Translations.t('back_to_menu', user.language),
-      callback_data: "category_#{category.id}"
-    )]
+
+    buttons << [
+      Telegram::Bot::Types::InlineKeyboardButton.new(
+        text: Translations.t('back_to_menu', user.language),
+        callback_data: "back_to_categories"
+      )
+    ]
+    
+    buttons << [
+      Telegram::Bot::Types::InlineKeyboardButton.new(
+        text: "🔙 Назад к #{category.name}",
+        callback_data: "category_#{category.id}"
+      )
+    ]
 
     markup = Telegram::Bot::Types::InlineKeyboardMarkup.new(inline_keyboard: buttons)
 
@@ -559,7 +575,7 @@ class SushiBot
       checkmark = order&.delivery_zone == zone_key ? "✅ " : ""
       
       # Calculate delivery fee based on order total
-      fee = if order&.total_amount && order.total_amount >= zone_info[user.language][:free_threshold]
+      fee = if order&.total && order.total >= zone_info[user.language][:free_threshold]
         0
       else
         zone_info[user.language][:fee]
@@ -971,6 +987,12 @@ class SushiBot
                 description.match?(/\b#{rom}\b/i)
         description = description.gsub(/\b#{rom}\b/i, eng)
       end
+    end
+
+    # Делаем первое слово с заглавной буквы
+    description = description.strip
+    if description.length > 0
+      description[0] = description[0].upcase
     end
 
     description
