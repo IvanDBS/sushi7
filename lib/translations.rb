@@ -29,8 +29,10 @@ module Translations
       price: "💰 Цена: %{price} MDL",
       item_removed: "❌ Товар удален из корзины",
       quantity_updated: "✅ Количество обновлено: %{quantity}",
-      payment_link: "💳 Для оплаты перейдите по ссылке: %{url}",
-      payment_error: "❌ Произошла ошибка при создании платежа. Пожалуйста, попробуйте позже.",
+      payment_link: "Для оплаты заказа перейдите по ссылке:\n%{url}",
+      payment_error: "Произошла ошибка при создании платежа. Пожалуйста, попробуйте позже или выберите оплату наличными.",
+      payment_success: "Оплата прошла успешно! Ваш заказ принят в обработку.",
+      payment_failed: "Оплата не прошла. Пожалуйста, попробуйте еще раз или выберите другой способ оплаты.",
       card_payment_unavailable: "❌ Оплата картой временно недоступна. Пожалуйста, выберите оплату наличными при получении.",
       categories: {
         "🍱 Сеты" => "🍱 Сеты",
@@ -81,8 +83,10 @@ module Translations
       price: "💰 Preț: %{price} MDL",
       item_removed: "❌ Produs eliminat din coș",
       quantity_updated: "✅ Cantitate actualizată: %{quantity}",
-      payment_link: "💳 Pentru plată, accesați linkul: %{url}",
-      payment_error: "❌ A apărut o eroare la crearea plății. Vă rugăm să încercați din nou.",
+      payment_link: "Pentru a plăti comanda, accesați linkul:\n%{url}",
+      payment_error: "A apărut o eroare la crearea plății. Vă rugăm să încercați mai târziu sau să alegeți plata în numerar.",
+      payment_success: "Plata a fost efectuată cu succes! Comanda dvs. este în curs de procesare.",
+      payment_failed: "Plata nu a reușit. Vă rugăm să încercați din nou sau să alegeți o altă metodă de plată.",
       card_payment_unavailable: "❌ Plata cu cardul este temporar indisponibilă. Vă rugăm să alegeți plata cash la livrare.",
       categories: {
         "🍱 Сеты" => "🍱 Seturi",
@@ -133,8 +137,10 @@ module Translations
       price: "💰 Price: %{price} MDL",
       item_removed: "❌ Item removed from cart",
       quantity_updated: "✅ Quantity updated: %{quantity}",
-      payment_link: "💳 For payment, follow the link: %{url}",
-      payment_error: "❌ An error occurred while creating the payment. Please try again.",
+      payment_link: "To pay for your order, please follow this link:\n%{url}",
+      payment_error: "There was an error creating the payment. Please try again later or choose cash payment.",
+      payment_success: "Payment successful! Your order is being processed.",
+      payment_failed: "Payment failed. Please try again or choose another payment method.",
       card_payment_unavailable: "❌ Card payment is temporarily unavailable. Please choose cash on delivery.",
       categories: {
         "🍱 Сеты" => "🍱 Sets",
@@ -158,12 +164,19 @@ module Translations
     }
   }
 
-  def self.t(key, language = 'ru')
-    if key.include?('.')
+  def self.t(key, language = 'ru', params = {})
+    text = if key.include?('.')
       main_key, sub_key = key.split('.')
       TRANSLATIONS[language.to_sym]&.dig(main_key.to_sym, sub_key) || TRANSLATIONS[:ru].dig(main_key.to_sym, sub_key) || key
     else
       TRANSLATIONS[language.to_sym]&.dig(key.to_sym) || TRANSLATIONS[:ru].dig(key.to_sym) || key
+    end
+
+    # Interpolate parameters if any
+    if params.is_a?(Hash) && !params.empty?
+      text % params
+    else
+      text
     end
   end
 end 

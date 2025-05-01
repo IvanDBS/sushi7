@@ -2,11 +2,10 @@ require 'telegram/bot'
 require 'dotenv/load'
 require_relative 'models'
 require_relative 'scraper'
-require_relative 'maib_client'
-require_relative 'maib_client_test'
 require_relative 'translations'
 require_relative 'ingredients'
 require_relative 'admin_commands'
+require_relative 'runpay_client'
 require 'http'
 require 'tempfile'
 
@@ -939,13 +938,45 @@ class SushiBot
     payment_method = callback_query.data.split('_').last
     order.update(payment_method: payment_method)
     
+    # Сразу отвечаем на callback query
+    bot.api.answer_callback_query(callback_query_id: callback_query.id)
+    
     if payment_method == 'cash'
       complete_order(bot, callback_query, order)
     else
-      bot.api.send_message(
-        chat_id: callback_query.message.chat.id,
-        text: Translations.t('card_payment_unavailable', user.language)
-      )
+      # Создаем платеж через RunPay
+      payment_url = order.create_payment
+
+      if payment_url
+        bot.api.send_message(
+          chat_id: callback_query.message.chat.id,
+          text: Translations.t('payment_link', user.language, url: payment_url),
+          parse_mode: 'HTML'
+        )
+        
+        # Запускаем проверку статуса платежа в отдельном потоке
+        Thread.new do
+          check_payment_status_periodically(order)
+        end
+      else
+        bot.api.send_message(
+          chat_id: callback_query.message.chat.id,
+          text: Translations.t('payment_error', user.language)
+        )
+      end
+    end
+  end
+
+  def check_payment_status_periodically(order, attempts = 0, max_attempts = 20)
+    return if attempts >= max_attempts
+    
+    sleep(15) # Ждем 15 секунд между проверками
+    
+    order.check_payment_status
+    
+    # Если статус все еще pending, проверяем снова
+    if order.payment_status == 'pending'
+      check_payment_status_periodically(order, attempts + 1, max_attempts)
     end
   end
 

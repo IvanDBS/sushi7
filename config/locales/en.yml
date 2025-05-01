@@ -1,0 +1,7 @@
+en:
+  payment_successful: "Payment for order #%{order_id} has been successfully processed!"
+  payment_failed: "Payment for order #%{order_id} has failed. Please try again."
+  payment_cancelled: "Payment for order #%{order_id} has been cancelled."
+  payment_error: "An error occurred while processing the payment. Please try again later."
+  payment_processing: "Processing payment..."
+  payment_redirect: "Please follow the link to pay for your order: %{payment_url}" 

@@ -1,0 +1,7 @@
+ro:
+  payment_successful: "Plata pentru comanda nr. %{order_id} a fost efectuată cu succes!"
+  payment_failed: "Plata pentru comanda nr. %{order_id} a eșuat. Vă rugăm să încercați din nou."
+  payment_cancelled: "Plata pentru comanda nr. %{order_id} a fost anulată."
+  payment_error: "A apărut o eroare la procesarea plății. Vă rugăm să încercați mai târziu."
+  payment_processing: "Procesare plată..."
+  payment_redirect: "Vă rugăm să accesați linkul pentru a plăti comanda: %{payment_url}" 

@@ -1,5 +1,6 @@
 require 'active_record'
 require 'dotenv/load'
+require_relative 'runpay_client'
 
 # Database configuration
 db_config = {
@@ -123,25 +124,68 @@ class Order < ActiveRecord::Base
     order_items.sum('quantity * price')
   end
 
-  def paid?
-    payment_status == 'success'
+  def create_payment
+    client = RunPayClient.new
+    
+    amount = total_with_delivery
+    
+    result = client.create_invoice(
+      invoice: {
+        description: "Order ##{id}",
+        orderId: id.to_s
+      },
+      amount: {
+        value: amount,
+        currency: "MDL"
+      },
+      paymentMethod: "BANKCARD"
+    )
+    
+    if result && result["url"]
+      update(
+        payment_id: result["paymentId"],
+        payment_status: "pending"
+      )
+      result["url"]
+    else
+      nil
+    end
   end
 
-  def process_payment_callback(payload, signature)
-    return false unless payload['result']
+  def process_payment_callback(payload)
+    return false unless payload['orderId'] == id.to_s
+    return false unless payload['merchantId'] == ENV['RUNPAY_MERCHANT_ID']
     
-    client = ENV['MAIB_TEST_MODE'] == 'true' ? MaibClientTest.new : MaibClient.new(
-      ENV['MAIB_PROJECT_ID'],
-      ENV['MAIB_PROJECT_SECRET'],
-      ENV['MAIB_SIGNATURE_KEY']
-    )
+    # Verify amount
+    expected_amount = (total_with_delivery * 100).to_i
+    return false unless payload['amount'] && 
+                       payload['amount']['value'].to_i == expected_amount &&
+                       payload['amount']['currency'] == 'MDL'
 
-    return false unless client.verify_signature(payload, signature)
+    new_status = case payload['status']
+                 when 'Settled'
+                   'success'
+                 when 'Authorized'
+                   'authorized'
+                 when 'Cancelled', 'Rejected'
+                   'failed'
+                 else
+                   'pending'
+                 end
+
+    # Add _test suffix for test payments
+    payment_status_value = ENV['RUNPAY_TEST_MODE'] == 'true' ? "#{new_status}_test" : new_status
 
     update(
-      payment_status: payload['result']['status'],
-      status: payload['result']['status'] == 'success' ? 'paid' : 'payment_failed'
+      payment_status: payment_status_value,
+      status: new_status == 'success' ? 'paid' : 'payment_failed'
     )
+
+    true
+  end
+
+  def paid?
+    payment_status == 'success'
   end
 
   def total
@@ -150,6 +194,75 @@ class Order < ActiveRecord::Base
 
   def language
     user.language
+  end
+
+  def check_payment_status
+    return unless payment_id && payment_status == 'pending'
+    
+    client = RunPayClient.new
+    result = client.get_payment_status(payment_id)
+    
+    if result['status'] == 'success' && result['payment']
+      case result['payment']['status']
+      when 'Settled'
+        update(status: 'paid', payment_status: 'success')
+        notify_about_payment(:success)
+      when 'Rejected', 'Cancelled'
+        update(status: 'payment_failed', payment_status: 'failed')
+        notify_about_payment(:failed)
+      end
+    end
+  end
+
+  def notify_about_payment(status)
+    Telegram::Bot::Client.run(ENV['TELEGRAM_BOT_TOKEN']) do |bot|
+      message = case status
+      when :success
+        Translations.t('payment_success', language)
+      when :failed
+        Translations.t('payment_failed', language)
+      end
+
+      # Уведомление пользователю
+      bot.api.send_message(
+        chat_id: user.telegram_id,
+        text: message
+      )
+
+      if status == :success
+        # Уведомление в админский чат
+        admin_message = "🆕 Новый заказ (оплачен)!\n\n"
+        admin_message += "🔢 ID заказа: #{id}\n"
+        admin_message += "👤 Клиент: #{user.first_name}"
+        admin_message += " (@#{user.username})" if user.username
+        admin_message += "\n"
+        admin_message += "📱 Телефон: #{phone}\n"
+        admin_message += "📍 Адрес: #{address}\n"
+        admin_message += "💭 Комментарий: #{comment}\n" if comment.present?
+        admin_message += "💰 Оплата: Картой (оплачено)\n\n"
+        admin_message += "📝 Заказ:\n"
+        
+        order_items.each do |item|
+          admin_message += "- #{item.product.name} x#{item.quantity} = #{item.quantity * item.price} MDL\n"
+        end
+        
+        admin_message += "\n💵 Итого: #{total_amount} MDL"
+        admin_message += "\n🚚 Доставка: #{delivery_fee} MDL"
+        admin_message += "\n💵 Итого с доставкой: #{total_with_delivery} MDL"
+
+        keyboard = {
+          inline_keyboard: [
+            [{ text: "✅ Принять", callback_data: "accept_order_#{id}" }]
+          ]
+        }
+
+        bot.api.send_message(
+          chat_id: ENV['ADMIN_CHAT_ID'],
+          text: admin_message,
+          reply_markup: keyboard.to_json
+        )
+      end
+    end
   end
 end
 

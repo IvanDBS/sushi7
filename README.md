@@ -14,6 +14,9 @@ bundle install
 ```
 TELEGRAM_BOT_TOKEN=your_bot_token_here
 ADMIN_CHAT_ID=your_admin_chat_id_here
+RUNPAY_MERCHANT_ID=your_merchant_id_here
+RUNPAY_API_TOKEN=your_api_token_here
+RUNPAY_TEST_MODE=true  # Для тестового режима
 ```
 
 ## Запуск
@@ -28,7 +31,27 @@ ruby lib/bot.rb
 - Просмотр меню по категориям
 - Добавление товаров в корзину
 - Оформление заказов
+- Онлайн оплата через RunPay
 - Уведомления администратору о новых заказах
+- Мультиязычность (RU/RO/EN)
+
+## Платежная система
+
+Бот интегрирован с платежной системой RunPay для приема онлайн-платежей:
+
+- Поддержка оплаты банковскими картами
+- Тестовый режим для отладки
+- Автоматическая проверка статуса платежей
+- Уведомления о статусе оплаты
+- Логирование всех платежных операций
+
+### Логи платежей
+
+Все платежные операции логируются в `log/runpay.log` с информацией о:
+- Создании платежа
+- Статусе платежа
+- Ошибках и исключениях
+- Временных метках операций
 
 ## Admin Commands
 
@@ -52,7 +75,7 @@ The bot includes several administrative commands for managing products:
 - `products` - товары
 - `product_categories` - связи между товарами и категориями
 - `users` - пользователи бота
-- `orders` - заказы
+- `orders` - заказы (включая информацию о платежах)
 - `order_items` - позиции в заказе
 
 ### Локальная разработка
@@ -68,7 +91,12 @@ sushi7/
 │   ├── scraper.rb       # Скрапер для парсинга меню
 │   ├── models.rb        # Модели базы данных
 │   ├── ingredients.rb   # Обработка ингредиентов
-│   └── admin_commands.rb # Административные команды
+│   ├── admin_commands.rb # Административные команды
+│   ├── runpay_client.rb # Клиент для работы с RunPay API
+│   ├── runpay_webhook.rb # Обработка вебхуков от RunPay
+│   └── translations.rb  # Мультиязычные переводы
+├── log/
+│   └── runpay.log      # Логи платежной системы
 ├── db/
 │   ├── migrations/      # Миграции базы данных
 │   ├── schema.sql      # Схема базы данных
